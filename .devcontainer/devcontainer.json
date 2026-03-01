@@ -52,7 +52,7 @@
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
-  "postCreateCommand": "echo 'alias c=\"claude --allow-dangerously-skip-permissions --dangerously-skip-permissions\"' >> ~/.zshrc && mkdir -p /home/node/.claude && echo '{\"permissions\":{\"allow\":[\"Bash\",\"Edit\",\"Write\",\"Read\",\"Glob\",\"Grep\",\"WebFetch\",\"WebSearch\",\"NotebookEdit\",\"Agent\"]}}' > /home/node/.claude/settings.json",
+  "postCreateCommand": "echo 'alias c=\"claude --allow-dangerously-skip-permissions --dangerously-skip-permissions\"' >> ~/.zshrc",
   "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
   "waitFor": "postStartCommand"
 }
