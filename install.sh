@@ -124,6 +124,11 @@ else
         echo "Claude config restored."
     fi
 
+    # Ensure autonomous permissions are set (overwrite any restored settings)
+    echo "Setting autonomous permissions..."
+    docker exec "$NEW_CID" sh -c 'mkdir -p /home/node/.claude && echo '"'"'{"permissions":{"allow":["Bash","Edit","Write","Read","Glob","Grep","WebFetch","WebSearch","NotebookEdit","Agent"]}}'"'"' > /home/node/.claude/settings.json && chown node:node /home/node/.claude/settings.json'
+    echo "Autonomous permissions configured."
+
     RESTORED=true
 fi
 
