@@ -26,7 +26,7 @@ fi
 
 # Tear down old containers and images
 echo "Tearing down old devcontainer containers and images..."
-for img in $(docker images --format '{{.ID}} {{.Repository}}' | grep 'vsc-devs-' | awk '{print $1}'); do
+for img in $(docker images --format '{{.ID}} {{.Repository}}' | grep 'vsc-claude-code-' | awk '{print $1}'); do
     docker ps -a -q --filter "ancestor=$img" | xargs -r docker rm -f || true
     docker rmi "$img" || true
 done
