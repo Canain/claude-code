@@ -2,20 +2,22 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SSH_BACKUP_DIR="${TMPDIR:-/tmp}/claude-devcontainer-ssh-backup"
+BACKUP_DIR="${TMPDIR:-/tmp}/claude-devcontainer-backup"
+SSH_BACKUP_DIR="$BACKUP_DIR/ssh"
+CLAUDE_BACKUP_DIR="$BACKUP_DIR/claude"
 
-SSH_RESTORED=false
+RESTORED=false
 
 cleanup() {
-    if [ "$SSH_RESTORED" = true ]; then
-        rm -rf "$SSH_BACKUP_DIR"
-    elif [ -n "$(ls -A "$SSH_BACKUP_DIR" 2>/dev/null)" ]; then
+    if [ "$RESTORED" = true ]; then
+        rm -rf "$BACKUP_DIR"
+    elif [ -n "$(ls -A "$SSH_BACKUP_DIR" 2>/dev/null)" ] || [ -n "$(ls -A "$CLAUDE_BACKUP_DIR" 2>/dev/null)" ]; then
         echo ""
-        echo "WARNING: SSH keys were NOT restored to a new container."
-        echo "Your backed-up SSH keys are preserved at: $SSH_BACKUP_DIR"
-        echo "They will be restored automatically on the next run."
+        echo "WARNING: Config was NOT restored to a new container."
+        echo "Your backed-up data is preserved at: $BACKUP_DIR"
+        echo "It will be restored automatically on the next run."
     else
-        rm -rf "$SSH_BACKUP_DIR" 2>/dev/null || true
+        rm -rf "$BACKUP_DIR" 2>/dev/null || true
     fi
 }
 trap cleanup EXIT
@@ -41,29 +43,37 @@ if ! command -v devcontainer &>/dev/null; then
     npm install -g @devcontainers/cli
 fi
 
-# Persist SSH keys from running containers before teardown
+# Persist SSH keys and Claude config from running containers before teardown
 # If a backup already exists from a previous failed run, keep it
-if [ -n "$(ls -A "$SSH_BACKUP_DIR" 2>/dev/null)" ]; then
-    echo "Found SSH keys from a previous run at $SSH_BACKUP_DIR, reusing."
+if [ -n "$(ls -A "$SSH_BACKUP_DIR" 2>/dev/null)" ] || [ -n "$(ls -A "$CLAUDE_BACKUP_DIR" 2>/dev/null)" ]; then
+    echo "Found backup from a previous run at $BACKUP_DIR, reusing."
 else
-    echo "Backing up SSH keys from running containers..."
-    mkdir -p "$SSH_BACKUP_DIR"
-    for img in $(docker images --format '{{.ID}} {{.Repository}}' | grep 'vsc-claude-code-' | awk '{print $1}'); do
-        for cid in $(docker ps -q --filter "ancestor=$img"); do
-            if docker exec "$cid" test -d /home/node/.ssh 2>/dev/null; then
-                echo "  Saving SSH keys from container $cid..."
-                docker cp "$cid:/home/node/.ssh/." "$SSH_BACKUP_DIR/" 2>/dev/null || true
-                break 2
-            fi
-        done
+    echo "Backing up SSH keys and Claude config from running containers..."
+    mkdir -p "$SSH_BACKUP_DIR" "$CLAUDE_BACKUP_DIR"
+    for cid in $(docker ps -q --filter "label=devcontainer.local_folder=$SCRIPT_DIR"); do
+        if docker exec "$cid" test -d /home/node/.ssh 2>/dev/null; then
+            echo "  Saving SSH keys from container $cid..."
+            docker cp "$cid:/home/node/.ssh/." "$SSH_BACKUP_DIR/" 2>/dev/null || true
+        fi
+        if docker exec "$cid" test -d /home/node/.claude 2>/dev/null; then
+            echo "  Saving Claude config from container $cid..."
+            docker cp "$cid:/home/node/.claude/." "$CLAUDE_BACKUP_DIR/" 2>/dev/null || true
+        fi
+        break
     done
 fi
 
 # Tear down old containers and images
 echo "Tearing down old devcontainer containers and images..."
-for img in $(docker images --format '{{.ID}} {{.Repository}}' | grep 'vsc-claude-code-' | awk '{print $1}'); do
-    docker ps -a -q --filter "ancestor=$img" | xargs -r docker rm -f || true
-    docker rmi "$img" || true
+
+# Remove containers by devcontainer label (most reliable)
+docker ps -a -q --filter "label=devcontainer.local_folder=$SCRIPT_DIR" | xargs -r docker rm -f 2>/dev/null || true
+
+# Remove devcontainer images
+for img in $(docker images --format '{{.ID}} {{.Repository}}' | grep 'vsc-claude-code-' | awk '{print $1}' | sort -u); do
+    # Also catch any containers missed by label filter
+    docker ps -a -q --filter "ancestor=$img" | xargs -r docker rm -f 2>/dev/null || true
+    docker rmi -f "$img" 2>/dev/null || true
 done
 
 # Start devcontainer
@@ -75,9 +85,10 @@ if ! devcontainer up --workspace-folder "$SCRIPT_DIR"; then
 
     # Retry once from a clean state
     echo "Pruning broken containers and retrying..."
-    for img in $(docker images --format '{{.ID}} {{.Repository}}' | grep 'vsc-claude-code-' | awk '{print $1}'); do
-        docker ps -a -q --filter "ancestor=$img" | xargs -r docker rm -f || true
-        docker rmi "$img" || true
+    docker ps -a -q --filter "label=devcontainer.local_folder=$SCRIPT_DIR" | xargs -r docker rm -f 2>/dev/null || true
+    for img in $(docker images --format '{{.ID}} {{.Repository}}' | grep 'vsc-claude-code-' | awk '{print $1}' | sort -u); do
+        docker ps -a -q --filter "ancestor=$img" | xargs -r docker rm -f 2>/dev/null || true
+        docker rmi -f "$img" 2>/dev/null || true
     done
 
     if ! devcontainer up --workspace-folder "$SCRIPT_DIR"; then
@@ -87,22 +98,36 @@ if ! devcontainer up --workspace-folder "$SCRIPT_DIR"; then
     fi
 fi
 
-# Restore SSH keys into the new container
-if [ -n "$(ls -A "$SSH_BACKUP_DIR" 2>/dev/null)" ]; then
-    echo "Restoring SSH keys to new container..."
-    NEW_CID=$(docker ps -q --filter "ancestor=$(docker images --format '{{.ID}} {{.Repository}}' | grep 'vsc-claude-code-' | awk '{print $1}' | head -1)" | head -1)
-    if [ -n "$NEW_CID" ]; then
+# Find new container
+NEW_CID=$(docker ps -q --filter "label=devcontainer.local_folder=$SCRIPT_DIR" | head -1)
+
+if [ -z "$NEW_CID" ]; then
+    echo "WARNING: Could not find new container to restore config."
+else
+    # Restore SSH keys
+    if [ -n "$(ls -A "$SSH_BACKUP_DIR" 2>/dev/null)" ]; then
+        echo "Restoring SSH keys to new container..."
         docker exec "$NEW_CID" mkdir -p /home/node/.ssh
         docker cp "$SSH_BACKUP_DIR/." "$NEW_CID:/home/node/.ssh/"
         docker exec "$NEW_CID" chown -R node:node /home/node/.ssh
         docker exec "$NEW_CID" chmod 700 /home/node/.ssh
         docker exec "$NEW_CID" sh -c 'chmod 600 /home/node/.ssh/* 2>/dev/null; chmod 644 /home/node/.ssh/*.pub 2>/dev/null; true'
-        SSH_RESTORED=true
         echo "SSH keys restored."
-    else
-        echo "WARNING: Could not find new container to restore SSH keys."
     fi
-else
-    echo "No SSH keys to restore."
-    SSH_RESTORED=true
+
+    # Restore Claude config
+    if [ -n "$(ls -A "$CLAUDE_BACKUP_DIR" 2>/dev/null)" ]; then
+        echo "Restoring Claude config to new container..."
+        docker exec "$NEW_CID" mkdir -p /home/node/.claude
+        docker cp "$CLAUDE_BACKUP_DIR/." "$NEW_CID:/home/node/.claude/"
+        docker exec "$NEW_CID" chown -R node:node /home/node/.claude
+        echo "Claude config restored."
+    fi
+
+    RESTORED=true
+fi
+
+if [ -z "$(ls -A "$SSH_BACKUP_DIR" 2>/dev/null)" ] && [ -z "$(ls -A "$CLAUDE_BACKUP_DIR" 2>/dev/null)" ]; then
+    echo "No config to restore."
+    RESTORED=true
 fi
