@@ -5,7 +5,7 @@ ENV TZ="$TZ"
 
 ARG CLAUDE_CODE_VERSION=latest
 
-# Install basic development tools and iptables/ipset
+# Install basic development tools, iptables/ipset, and Python
 RUN apt-get update && apt-get install -y --no-install-recommends \
   less \
   git \
@@ -27,7 +27,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   vim \
   screen \
   locales \
+  python3 \
+  python3-pip \
+  python3-dev \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install PyTorch with CUDA support
+RUN pip install --break-system-packages \
+  torch --index-url https://download.pytorch.org/whl/cu128
+
+# Install Python packages for Athena
+RUN pip install --break-system-packages \
+  sentence-transformers==5.2.3 duckdb==1.4.2 numpy==2.0.2 \
+  pandas==2.2.3 scipy==1.15.3 polygon-api-client==1.15.4 \
+  python-dotenv==1.1.0 tqdm==4.67.1 websocket-client==1.8.0 \
+  ruff mypy
 
 # Generate en_US.UTF-8 locale
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
