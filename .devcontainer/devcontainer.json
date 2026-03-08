@@ -52,7 +52,7 @@
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
-  "postCreateCommand": "echo 'alias c=\"claude --allow-dangerously-skip-permissions --dangerously-skip-permissions\"' >> ~/.zshrc",
+  "postCreateCommand": "echo 'alias a=\"claude --allow-dangerously-skip-permissions --dangerously-skip-permissions\"' >> ~/.zshrc",
   "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
   "waitFor": "postStartCommand"
 }
