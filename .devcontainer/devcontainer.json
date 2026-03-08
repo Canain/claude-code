@@ -53,7 +53,7 @@
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
-  "postCreateCommand": "echo 'alias a=\"claude --allow-dangerously-skip-permissions --dangerously-skip-permissions\"' >> ~/.zshrc",
+  "postCreateCommand": "cat >> ~/.zshrc << 'ALIASES'\nalias a=\"claude --allow-dangerously-skip-permissions --dangerously-skip-permissions\"\n\n# Git aliases\nalias gd='git status && git -P diff'\nalias gs='git pull && git push && git -P log -n 3'\nalias ga='git status && git -P diff && git add -A && git status'\ngac() { git status && git -P diff && git add -A && git status && git commit -m \"$*\" && git pull && git push; }\n\n# Utilities\nd() { if [ $# -gt 0 ]; then du -sh $@; else du -sh *; fi }\n\n# Screen sessions\nPROJECT_DIR=\"/workspace/internal/athena\"\nalias t='[ -n \"$STY\" ] && cd $PROJECT_DIR || (screen -d t &>/dev/null; screen -r t &>/dev/null || (cd $PROJECT_DIR && screen -S t))'\nalias s='[ -n \"$STY\" ] && cd $PROJECT_DIR || (screen -d s &>/dev/null; screen -r s &>/dev/null || (cd $PROJECT_DIR && screen -S s))'\nALIASES",
   "postStartCommand": "sudo /usr/local/bin/init-firewall.sh && sudo /usr/local/bin/start-tailscale.sh",
   "waitFor": "postStartCommand"
 }
