@@ -26,7 +26,9 @@ has_backup() {
 
 cleanup() {
     if [ "$RESTORED" = true ]; then
-        rm -rf "$BACKUP_DIR"
+        # Keep backup as permanent fallback — container
+        # can be rebuilt without running wsl.sh again
+        echo "Backup preserved at $BACKUP_DIR"
     elif has_backup; then
         echo ""
         echo "WARNING: Config was NOT restored to a new container."
@@ -64,8 +66,10 @@ fi
 if has_backup; then
     echo "Found backup from a previous run at $BACKUP_DIR, reusing."
 else
-    echo "Backing up credentials from running containers..."
+    echo "Backing up credentials..."
     mkdir -p "$SSH_BACKUP_DIR" "$CLAUDE_BACKUP_DIR" "$GH_BACKUP_DIR"
+
+    # Try backing up from running container first
     for cid in $(docker ps -q --filter "label=devcontainer.local_folder=$SCRIPT_DIR"); do
         if docker exec "$cid" test -d /home/node/.ssh 2>/dev/null; then
             echo "  Saving SSH keys from container $cid..."
@@ -85,6 +89,7 @@ else
         fi
         break
     done
+
 fi
 
 # Tear down old containers and images
