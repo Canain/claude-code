@@ -48,11 +48,12 @@
   "containerEnv": {
     "NODE_OPTIONS": "--max-old-space-size=4096",
     "CLAUDE_CONFIG_DIR": "/home/node/.claude",
-    "POWERLEVEL9K_DISABLE_GITSTATUS": "true"
+    "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
+    "TS_AUTHKEY": "${localEnv:TS_AUTHKEY}"
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
   "postCreateCommand": "echo 'alias a=\"claude --allow-dangerously-skip-permissions --dangerously-skip-permissions\"' >> ~/.zshrc",
-  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh && sudo /usr/local/bin/start-tailscale.sh",
   "waitFor": "postStartCommand"
 }

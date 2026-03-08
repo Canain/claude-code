@@ -2,6 +2,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source .env if present (for TS_AUTHKEY, etc.)
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env"
+    set +a
+fi
 BACKUP_DIR="${TMPDIR:-/tmp}/claude-devcontainer-backup"
 SSH_BACKUP_DIR="$BACKUP_DIR/ssh"
 CLAUDE_BACKUP_DIR="$BACKUP_DIR/claude"

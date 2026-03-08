@@ -87,11 +87,15 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
 # Install Claude
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
-
-# Copy and set up firewall script
-COPY init-firewall.sh /usr/local/bin/
+# Install Tailscale
 USER root
-RUN chmod +x /usr/local/bin/init-firewall.sh && \
+RUN curl -fsSL https://tailscale.com/install.sh | sh
+USER node
+
+# Copy and set up firewall and Tailscale scripts
+COPY init-firewall.sh start-tailscale.sh /usr/local/bin/
+USER root
+RUN chmod +x /usr/local/bin/init-firewall.sh /usr/local/bin/start-tailscale.sh && \
   echo "node ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/node-nopasswd && \
   chmod 0440 /etc/sudoers.d/node-nopasswd
 USER node
