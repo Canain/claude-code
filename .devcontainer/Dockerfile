@@ -33,7 +33,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install PyTorch with CUDA support
-RUN pip install --break-system-packages \
+# Pre-install typing-extensions from PyPI to work around metadata inconsistency
+# in the PyTorch CUDA wheel index
+RUN pip install --break-system-packages typing-extensions && \
+  pip install --break-system-packages \
   torch --index-url https://download.pytorch.org/whl/cu128
 
 # Install Python packages for Athena
