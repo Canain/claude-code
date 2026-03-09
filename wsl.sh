@@ -14,6 +14,7 @@ SSH_BACKUP_DIR="$BACKUP_DIR/ssh"
 CLAUDE_BACKUP_DIR="$BACKUP_DIR/claude"
 GH_BACKUP_DIR="$BACKUP_DIR/gh"
 GITCONFIG_BACKUP="$BACKUP_DIR/gitconfig"
+GDRIVE_BACKUP_DIR="$BACKUP_DIR/gdrive3"
 
 RESTORED=false
 
@@ -21,7 +22,8 @@ has_backup() {
     [ -n "$(ls -A "$SSH_BACKUP_DIR" 2>/dev/null)" ] \
     || [ -n "$(ls -A "$CLAUDE_BACKUP_DIR" 2>/dev/null)" ] \
     || [ -n "$(ls -A "$GH_BACKUP_DIR" 2>/dev/null)" ] \
-    || [ -f "$GITCONFIG_BACKUP" ]
+    || [ -f "$GITCONFIG_BACKUP" ] \
+    || [ -n "$(ls -A "$GDRIVE_BACKUP_DIR" 2>/dev/null)" ]
 }
 
 cleanup() {
@@ -67,7 +69,7 @@ if has_backup; then
     echo "Found backup from a previous run at $BACKUP_DIR, reusing."
 else
     echo "Backing up credentials..."
-    mkdir -p "$SSH_BACKUP_DIR" "$CLAUDE_BACKUP_DIR" "$GH_BACKUP_DIR"
+    mkdir -p "$SSH_BACKUP_DIR" "$CLAUDE_BACKUP_DIR" "$GH_BACKUP_DIR" "$GDRIVE_BACKUP_DIR"
 
     # Try backing up from running container first
     for cid in $(docker ps -q --filter "label=devcontainer.local_folder=$SCRIPT_DIR"); do
@@ -86,6 +88,10 @@ else
         if docker exec "$cid" test -f /home/node/.gitconfig 2>/dev/null; then
             echo "  Saving git config from container $cid..."
             docker cp "$cid:/home/node/.gitconfig" "$GITCONFIG_BACKUP" 2>/dev/null || true
+        fi
+        if docker exec "$cid" test -d /home/node/.config/gdrive3 2>/dev/null; then
+            echo "  Saving gdrive credentials from container $cid..."
+            docker cp "$cid:/home/node/.config/gdrive3/." "$GDRIVE_BACKUP_DIR/" 2>/dev/null || true
         fi
         break
     done
@@ -168,6 +174,15 @@ else
         docker cp "$GITCONFIG_BACKUP" "$NEW_CID:/home/node/.gitconfig"
         docker exec "$NEW_CID" chown node:node /home/node/.gitconfig
         echo "git config restored."
+    fi
+
+    # Restore gdrive credentials
+    if [ -n "$(ls -A "$GDRIVE_BACKUP_DIR" 2>/dev/null)" ]; then
+        echo "Restoring gdrive credentials to new container..."
+        docker exec "$NEW_CID" mkdir -p /home/node/.config/gdrive3
+        docker cp "$GDRIVE_BACKUP_DIR/." "$NEW_CID:/home/node/.config/gdrive3/"
+        docker exec "$NEW_CID" chown -R node:node /home/node/.config/gdrive3
+        echo "gdrive credentials restored."
     fi
 
     # Ensure autonomous permissions are set (overwrite any restored settings)
