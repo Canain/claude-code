@@ -102,6 +102,13 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
   -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
   -x
 
+# Install gdrive
+ARG GDRIVE_VERSION=3.9.1
+RUN wget -q "https://github.com/glotlabs/gdrive/releases/download/${GDRIVE_VERSION}/gdrive_linux-x64.tar.gz" -O /tmp/gdrive.tar.gz && \
+  tar -xzf /tmp/gdrive.tar.gz -C /usr/local/bin gdrive && \
+  chmod +x /usr/local/bin/gdrive && \
+  rm /tmp/gdrive.tar.gz
+
 # Install Claude
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
