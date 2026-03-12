@@ -72,6 +72,7 @@ else
     mkdir -p "$SSH_BACKUP_DIR" "$CLAUDE_BACKUP_DIR" "$GH_BACKUP_DIR" "$GDRIVE_BACKUP_DIR"
 
     # Try backing up from running container first
+    BACKED_UP_FROM_CONTAINER=false
     for cid in $(docker ps -q --filter "label=devcontainer.local_folder=$SCRIPT_DIR"); do
         if docker exec "$cid" test -d /home/node/.ssh 2>/dev/null; then
             echo "  Saving SSH keys from container $cid..."
@@ -93,8 +94,34 @@ else
             echo "  Saving gdrive credentials from container $cid..."
             docker cp "$cid:/home/node/.config/gdrive3/." "$GDRIVE_BACKUP_DIR/" 2>/dev/null || true
         fi
+        BACKED_UP_FROM_CONTAINER=true
         break
     done
+
+    # Fall back to WSL host credentials if no container was found
+    if [ "$BACKED_UP_FROM_CONTAINER" = false ]; then
+        echo "  No running container found, falling back to host credentials..."
+        if [ -n "$(ls -A "$HOME/.ssh" 2>/dev/null)" ]; then
+            echo "  Copying SSH keys from host..."
+            cp -a "$HOME/.ssh/." "$SSH_BACKUP_DIR/" 2>/dev/null || true
+        fi
+        if [ -n "$(ls -A "$HOME/.claude" 2>/dev/null)" ]; then
+            echo "  Copying Claude config from host..."
+            cp -a "$HOME/.claude/." "$CLAUDE_BACKUP_DIR/" 2>/dev/null || true
+        fi
+        if [ -n "$(ls -A "$HOME/.config/gh" 2>/dev/null)" ]; then
+            echo "  Copying gh credentials from host..."
+            cp -a "$HOME/.config/gh/." "$GH_BACKUP_DIR/" 2>/dev/null || true
+        fi
+        if [ -f "$HOME/.gitconfig" ]; then
+            echo "  Copying git config from host..."
+            cp -a "$HOME/.gitconfig" "$GITCONFIG_BACKUP" 2>/dev/null || true
+        fi
+        if [ -n "$(ls -A "$HOME/.config/gdrive3" 2>/dev/null)" ]; then
+            echo "  Copying gdrive credentials from host..."
+            cp -a "$HOME/.config/gdrive3/." "$GDRIVE_BACKUP_DIR/" 2>/dev/null || true
+        fi
+    fi
 
 fi
 
@@ -142,47 +169,62 @@ else
     # Restore SSH keys
     if [ -n "$(ls -A "$SSH_BACKUP_DIR" 2>/dev/null)" ]; then
         echo "Restoring SSH keys to new container..."
-        docker exec "$NEW_CID" mkdir -p /home/node/.ssh
-        docker cp "$SSH_BACKUP_DIR/." "$NEW_CID:/home/node/.ssh/"
-        docker exec "$NEW_CID" chown -R node:node /home/node/.ssh
-        docker exec "$NEW_CID" chmod 700 /home/node/.ssh
-        docker exec "$NEW_CID" sh -c 'chmod 600 /home/node/.ssh/* 2>/dev/null; chmod 644 /home/node/.ssh/*.pub 2>/dev/null; true'
-        echo "SSH keys restored."
+        if docker exec "$NEW_CID" mkdir -p /home/node/.ssh \
+            && docker cp "$SSH_BACKUP_DIR/." "$NEW_CID:/home/node/.ssh/" \
+            && docker exec "$NEW_CID" chown -R node:node /home/node/.ssh \
+            && docker exec "$NEW_CID" chmod 700 /home/node/.ssh \
+            && docker exec "$NEW_CID" sh -c 'chmod 600 /home/node/.ssh/* 2>/dev/null; chmod 644 /home/node/.ssh/*.pub 2>/dev/null; true'; then
+            echo "SSH keys restored."
+        else
+            echo "WARNING: Failed to restore SSH keys."
+        fi
     fi
 
     # Restore Claude config
     if [ -n "$(ls -A "$CLAUDE_BACKUP_DIR" 2>/dev/null)" ]; then
         echo "Restoring Claude config to new container..."
-        docker exec "$NEW_CID" mkdir -p /home/node/.claude
-        docker cp "$CLAUDE_BACKUP_DIR/." "$NEW_CID:/home/node/.claude/"
-        docker exec "$NEW_CID" chown -R node:node /home/node/.claude
-        echo "Claude config restored."
+        if docker exec "$NEW_CID" mkdir -p /home/node/.claude \
+            && docker cp "$CLAUDE_BACKUP_DIR/." "$NEW_CID:/home/node/.claude/" \
+            && docker exec "$NEW_CID" chown -R node:node /home/node/.claude; then
+            echo "Claude config restored."
+        else
+            echo "WARNING: Failed to restore Claude config."
+        fi
     fi
 
     # Restore gh credentials
     if [ -n "$(ls -A "$GH_BACKUP_DIR" 2>/dev/null)" ]; then
         echo "Restoring gh credentials to new container..."
-        docker exec "$NEW_CID" mkdir -p /home/node/.config/gh
-        docker cp "$GH_BACKUP_DIR/." "$NEW_CID:/home/node/.config/gh/"
-        docker exec "$NEW_CID" chown -R node:node /home/node/.config/gh
-        echo "gh credentials restored."
+        if docker exec "$NEW_CID" mkdir -p /home/node/.config/gh \
+            && docker cp "$GH_BACKUP_DIR/." "$NEW_CID:/home/node/.config/gh/" \
+            && docker exec "$NEW_CID" chown -R node:node /home/node/.config/gh; then
+            echo "gh credentials restored."
+        else
+            echo "WARNING: Failed to restore gh credentials."
+        fi
     fi
 
     # Restore git config
     if [ -f "$GITCONFIG_BACKUP" ]; then
         echo "Restoring git config to new container..."
-        docker cp "$GITCONFIG_BACKUP" "$NEW_CID:/home/node/.gitconfig"
-        docker exec "$NEW_CID" chown node:node /home/node/.gitconfig
-        echo "git config restored."
+        if docker cp "$GITCONFIG_BACKUP" "$NEW_CID:/home/node/.gitconfig" \
+            && docker exec "$NEW_CID" chown node:node /home/node/.gitconfig; then
+            echo "git config restored."
+        else
+            echo "WARNING: Failed to restore git config."
+        fi
     fi
 
     # Restore gdrive credentials
     if [ -n "$(ls -A "$GDRIVE_BACKUP_DIR" 2>/dev/null)" ]; then
         echo "Restoring gdrive credentials to new container..."
-        docker exec "$NEW_CID" mkdir -p /home/node/.config/gdrive3
-        docker cp "$GDRIVE_BACKUP_DIR/." "$NEW_CID:/home/node/.config/gdrive3/"
-        docker exec "$NEW_CID" chown -R node:node /home/node/.config/gdrive3
-        echo "gdrive credentials restored."
+        if docker exec "$NEW_CID" mkdir -p /home/node/.config/gdrive3 \
+            && docker cp "$GDRIVE_BACKUP_DIR/." "$NEW_CID:/home/node/.config/gdrive3/" \
+            && docker exec "$NEW_CID" chown -R node:node /home/node/.config/gdrive3; then
+            echo "gdrive credentials restored."
+        else
+            echo "WARNING: Failed to restore gdrive credentials."
+        fi
     fi
 
     # Ensure autonomous permissions are set (overwrite any restored settings)
